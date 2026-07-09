@@ -154,6 +154,20 @@ button{
 .btn-clear{background:transparent;color:var(--danger);border:1px solid var(--danger);}
 .btn-clear:hover{background:#fbeceb;}
 
+.atalho-chip{display:flex;align-items:stretch;border-radius:8px;overflow:hidden;}
+.atalho-chip button.atalho-apply{
+  background:#e4efed;color:var(--accent-dark);border:none;
+  padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;
+  border-radius:8px 0 0 8px;
+}
+.atalho-chip button.atalho-apply:hover{background:#d5e7e3;}
+.atalho-chip button.atalho-del{
+  background:#f3d9d6;color:var(--danger);border:none;
+  padding:9px 10px;font-size:13px;font-weight:700;cursor:pointer;
+  border-radius:0 8px 8px 0;
+}
+.atalho-chip button.atalho-del:hover{background:#eccac6;}
+
 .note{
   font-size:12px;color:var(--ink-soft);
   background:#fef7ec;border:1px solid #f0dcb0;
@@ -247,6 +261,18 @@ button{
       <div class="field"><label>9 · Nome do Profissional Solicitante</label><input type="text" id="f9" value="Luiz Filipe Alkamin Woellner"></div>
       <div class="field"><label>10 · Telefone</label><input type="text" id="f10" placeholder="(41) 3333-4444"></div>
       <div class="field"><label>11 · E-mail</label><input type="text" id="f11"></div>
+    </div>
+  </div>
+
+  <div class="section" id="atalhosSection">
+    <h2>Atalhos rápidos</h2>
+    <div class="note" style="margin-bottom:12px;">Clique num atalho para preencher a justificativa técnica, a especificação do material e os materiais OPME automaticamente. Use "+ Salvar atalho" para guardar o que estiver preenchido agora no formulário como um novo atalho (fica salvo neste navegador). Use exportar/importar para levar os atalhos de um computador para outro.</div>
+    <div id="atalhosList" style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px;"></div>
+    <div class="btnbar">
+      <button class="btn-add" id="addAtalho" type="button">+ Salvar atalho com os dados atuais</button>
+      <button class="btn-add" id="exportAtalhos" type="button">Exportar atalhos (.json)</button>
+      <button class="btn-add" id="importAtalhosBtn" type="button">Importar atalhos</button>
+      <input type="file" id="importAtalhosInput" accept="application/json,.json" style="display:none;">
     </div>
   </div>
 
@@ -350,6 +376,189 @@ document.getElementById('clearMats').addEventListener('click', ()=>{
 
 // primeira linha por padrão
 addMatRow();
+
+// ---------- Atalhos rápidos ----------
+const ATALHOS_KEY = 'opme_atalhos_v1';
+const ATALHOS_PADRAO = [];
+
+function carregarAtalhos(){
+  try{
+    const raw = localStorage.getItem(ATALHOS_KEY);
+    if(!raw) return ATALHOS_PADRAO.slice();
+    const parsed = JSON.parse(raw);
+    return (Array.isArray(parsed) && parsed.length) ? parsed : ATALHOS_PADRAO.slice();
+  } catch(e){
+    return ATALHOS_PADRAO.slice();
+  }
+}
+
+function salvarAtalhos(lista){
+  try{ localStorage.setItem(ATALHOS_KEY, JSON.stringify(lista)); }
+  catch(e){ console.error('Não foi possível salvar atalhos:', e); }
+}
+
+let atalhos = carregarAtalhos();
+
+function renderAtalhos(){
+  const cont = document.getElementById('atalhosList');
+  cont.innerHTML = '';
+  if(!atalhos.length){
+    const vazio = document.createElement('div');
+    vazio.className = 'note';
+    vazio.style.margin = '0';
+    vazio.textContent = 'Nenhum atalho salvo ainda.';
+    cont.appendChild(vazio);
+    return;
+  }
+  atalhos.forEach((atalho, idx)=>{
+    const chip = document.createElement('div');
+    chip.className = 'atalho-chip';
+
+    const applyBtn = document.createElement('button');
+    applyBtn.type = 'button';
+    applyBtn.className = 'atalho-apply';
+    applyBtn.textContent = atalho.nome;
+    applyBtn.title = atalho.justificativa || '';
+    applyBtn.addEventListener('click', ()=> aplicarAtalho(atalho));
+
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'atalho-del';
+    delBtn.textContent = '×';
+    delBtn.title = 'Remover atalho';
+    delBtn.addEventListener('click', ()=>{
+      if(confirm(`Remover o atalho "${atalho.nome}"?`)){
+        atalhos.splice(idx,1);
+        salvarAtalhos(atalhos);
+        renderAtalhos();
+      }
+    });
+
+    chip.appendChild(applyBtn);
+    chip.appendChild(delBtn);
+    cont.appendChild(chip);
+  });
+}
+
+function proximoSlotVazioMaterial(){
+  for(let n=1;n<=matCount;n++){
+    const descEl = document.getElementById(`mt${n}_desc`);
+    const refEl = document.getElementById(`mt${n}_ref`);
+    if(descEl && !descEl.value && refEl && !refEl.value) return n;
+  }
+  addMatRow();
+  return matCount;
+}
+
+function aplicarAtalho(atalho){
+  if(atalho.justificativa) document.getElementById('f12').value = atalho.justificativa;
+  if(atalho.especificacao) document.getElementById('f24').value = atalho.especificacao;
+  (atalho.materiais || []).forEach(mat=>{
+    const n = proximoSlotVazioMaterial();
+    document.getElementById(`mt${n}_desc`).value = mat.desc || '';
+    document.getElementById(`mt${n}_qtde`).value = mat.qtde || '1';
+    document.getElementById(`mt${n}_ref`).value = mat.ref || '';
+  });
+  document.getElementById('status').textContent = `Atalho "${atalho.nome}" aplicado.`;
+}
+
+document.getElementById('addAtalho').addEventListener('click', ()=>{
+  const nome = prompt('Nome do atalho (ex: "Angioplastia coronariana"):');
+  if(!nome) return;
+  const justificativa = document.getElementById('f12').value.trim();
+  const especificacao = document.getElementById('f24').value.trim();
+  const materiais = [];
+  for(let n=1;n<=matCount;n++){
+    const descEl = document.getElementById(`mt${n}_desc`);
+    const qtdeEl = document.getElementById(`mt${n}_qtde`);
+    const refEl = document.getElementById(`mt${n}_ref`);
+    if(descEl && descEl.value){
+      materiais.push({
+        desc: descEl.value,
+        qtde: qtdeEl ? qtdeEl.value : '1',
+        ref: refEl ? refEl.value : ''
+      });
+    }
+  }
+  if(!materiais.length && !justificativa && !especificacao){
+    alert('Preencha a justificativa técnica, a especificação do material e/ou pelo menos um material antes de salvar o atalho.');
+    return;
+  }
+  atalhos.push({ id: 'custom-' + Date.now(), nome, justificativa, especificacao, materiais });
+  salvarAtalhos(atalhos);
+  renderAtalhos();
+  document.getElementById('status').textContent = `Atalho "${nome}" salvo.`;
+});
+
+document.getElementById('exportAtalhos').addEventListener('click', ()=>{
+  try{
+    const json = JSON.stringify(atalhos, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'atalhos_opme.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url), 5000);
+    document.getElementById('status').textContent = 'Atalhos exportados com sucesso.';
+  } catch(err){
+    console.error(err);
+    document.getElementById('status').textContent = 'Erro ao exportar atalhos: ' + err.message;
+  }
+});
+
+document.getElementById('importAtalhosBtn').addEventListener('click', ()=>{
+  document.getElementById('importAtalhosInput').click();
+});
+
+document.getElementById('importAtalhosInput').addEventListener('change', (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let importados;
+    try{
+      importados = JSON.parse(reader.result);
+      if(!Array.isArray(importados)) throw new Error('O arquivo não contém uma lista de atalhos válida.');
+    } catch(err){
+      console.error(err);
+      alert('Não foi possível ler esse arquivo de atalhos: ' + err.message);
+      e.target.value = '';
+      return;
+    }
+
+    const substituir = confirm(
+      `Encontrados ${importados.length} atalho(s) no arquivo.\n\n` +
+      `Clique OK para SUBSTITUIR os atalhos atuais por esses.\n` +
+      `Clique Cancelar para ADICIONAR esses aos atalhos que já existem.`
+    );
+
+    if(substituir){
+      atalhos = importados;
+    } else {
+      const nomesExistentes = new Set(atalhos.map(a => a.nome));
+      importados.forEach(novo => {
+        if(!nomesExistentes.has(novo.nome)){
+          atalhos.push(novo);
+          nomesExistentes.add(novo.nome);
+        }
+      });
+    }
+    salvarAtalhos(atalhos);
+    renderAtalhos();
+    document.getElementById('status').textContent = 'Atalhos importados com sucesso.';
+    e.target.value = '';
+  };
+  reader.onerror = () => {
+    alert('Erro ao ler o arquivo.');
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+});
+
+renderAtalhos();
 
 document.getElementById('convenio').addEventListener('change', (e)=>{
   const opt = e.target.selectedOptions[0];
