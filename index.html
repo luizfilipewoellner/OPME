@@ -592,15 +592,16 @@ function fmtDate(iso){
   return `${d}/${m}/${y}`;
 }
 
-function wrapText(text, maxCharsPerLine){
+function wrapTextByWidth(text, maxWidthPt, font, fontSize){
   if(!text) return [];
-  const words = text.split(' ');
+  const words = text.split(/\s+/).filter(Boolean);
   const lines = [];
   let cur = '';
   words.forEach(w=>{
     const test = cur ? cur + ' ' + w : w;
-    if(test.length > maxCharsPerLine){
-      if(cur) lines.push(cur);
+    const width = font.widthOfTextAtSize(test, fontSize);
+    if(width > maxWidthPt && cur){
+      lines.push(cur);
       cur = w;
     } else {
       cur = test;
@@ -686,21 +687,24 @@ async function buildPdfBytes(){
     put(pg, 486, 137, v('f11'), 7);
 
     // Dados da Cirurgia / Justificativa Técnica (12)
-    const justLines = wrapText(v('f12'), 215);
+    const justFontSize = 7;
+    const justLines = wrapTextByWidth(v('f12'), 745, font, justFontSize);
     justLines.slice(0,9).forEach((line,i)=>{
-      put(pg, 40, 163 + i*10, line, 7);
+      put(pg, 40, 163 + i*10, line, justFontSize);
     });
 
     // Especificação do Material (24)
-    const espLines = wrapText(v('f24'), 125);
+    const espFontSize = 7;
+    const espLines = wrapTextByWidth(v('f24'), 745, font, espFontSize);
     espLines.slice(0,3).forEach((line,i)=>{
-      put(pg, 40, 443 + i*10, line, 7);
+      put(pg, 40, 443 + i*10, line, espFontSize);
     });
 
     // Observação / Justificativa (25)
-    const obsLines = wrapText(v('f25'), 125);
+    const obsFontSize = 7;
+    const obsLines = wrapTextByWidth(v('f25'), 745, font, obsFontSize);
     obsLines.slice(0,3).forEach((line,i)=>{
-      put(pg, 40, 493 + i*10, line, 7);
+      put(pg, 40, 493 + i*10, line, obsFontSize);
     });
 
     // Data da Solicitação (26)
